@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <title>Block Breaker</title>
+  <style>
+    body {
+      text-align: center;
+      font-family: sans-serif;
+      background: #ffe6f0;
+    }
+    canvas {
+      background: linear-gradient(to bottom, #fef6e4, #fcd5ce);
+      display: block;
+      margin: 20px auto;
+      border: 2px solid #333;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="gameCanvas" width="480" height="320"></canvas>
+  <script>
+    const canvas = document.getElementById("gameCanvas");
+    const ctx = canvas.getContext("2d");
+
+    let gameStarted = false;
+    let gameOver = false;
+    let win = false;
+
+    let paddleX, x, y, dx, dy;
+    let paddleYOffset = 0;
+
+    const paddleWidth = 75;
+    const paddleHeight = 10;
+    const ballRadius = 8;
+
+    const brickRowCount = 3;
+    const brickColumnCount = 5;
+    const brickWidth = 75;
+    const brickHeight = 20;
+    const brickPadding = 10;
+    const brickOffsetTop = 30;
+    const brickOffsetLeft = 30;
+
+    let bricks;
+    let rightPressed = false;
+    let leftPressed = false;
+    let particles = [];
+
+    const brickColors = ["#f78da7", "#fcbf49", "#90dbf4"];
+
+    document.addEventListener("keydown", keyDownHandler);
+    document.addEventListener("keyup", keyUpHandler);
+
+    function keyDownHandler(e) {
+      if (e.key === "Right" || e.key === "ArrowRight") rightPressed = true;
+      else if (e.key === "Left" || e.key === "ArrowLeft") leftPressed = true;
+      else if (e.key === "Enter") {
+        if (!gameStarted || gameOver) {
+          resetGame();
+          gameStarted = true;
+          draw();
+        }
+      } else if (e.key === " ") {
+        if (!gameOver && gameStarted && paddleYOffset === 0) {
+          paddleYOffset = 10;
+          dy *= 1.1;
+        }
+      }
+    }
+
+    function keyUpHandler(e) {
+      if (e.key === "Right" || e.key === "ArrowRight") rightPressed = false;
+      else if (e.key === "Left" || e.key === "ArrowLeft") leftPressed = false;
+    }
+
+    function resetGame() {
+      paddleX = (canvas.width - paddleWidth) / 2;
+      x = canvas.width / 2;
+      y = canvas.height - 30;
+      dx = 4;
+      dy = -4;
+      paddleYOffset = 0;
+      gameOver = false;
+      win = false;
+      particles = [];
+
+      bricks = [];
+      for (let c = 0; c < brickColumnCount; c++) {
+        bricks[c] = [];
+        for (let r = 0; r < brickRowCount; r++) {
+          bricks[c][r] = { x: 0, y: 0, status: 1 };
+        }
+      }
+    }
+
+    function drawRoundedRect(x, y, w, h, r) {
+      ctx.beginPath();
+      ctx.moveTo(x + r, y);
+      ctx.lineTo(x + w - r, y);
+      ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+      ctx.lineTo(x + w, y + h - r);
+      ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+      ctx.lineTo(x + r, y + h);
+      ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+      ctx.lineTo(x, y + r);
+      ctx.quadraticCurveTo(x, y, x + r, y);
+      ctx.closePath();
+    }
+
+    function drawBall() {
+      ctx.beginPath();
+      ctx.arc(x, y, ballRadius, 0, Math.PI * 2);
+      ctx.fillStyle = "#77dd77";
+      ctx.fill();
+      ctx.closePath();
+    }
+
+    function drawPaddle() {
+      const yOffset = canvas.height - paddleHeight - paddleYOffset;
+      drawRoundedRect(paddleX, yOffset, paddleWidth, paddleHeight, 5);
+      ctx.fillStyle = "#77dd77";
+      ctx.fill();
+    }
+
+    function drawBricks() {
+      for (let c = 0; c < brickColumnCount; c++) {
+        for (let r = 0; r < brickRowCount; r++) {
+          if (bricks[c][r].status === 1) {
+            const brickX = c * (brickWidth + brickPadding) + brickOffsetLeft;
+            const brickY = r * (brickHeight + brickPadding) + brickOffsetTop;
+            bricks[c][r].x = brickX;
+            bricks[c][r].y = brickY;
+            ctx.beginPath();
+            drawRoundedRect(brickX, brickY, brickWidth, brickHeight, 6);
+            ctx.fillStyle = brickColors[r % brickColors.length];
+            ctx.fill();
+            ctx.closePath();
+          }
+        }
+      }
+    }
+
+    function createParticles(x, y) {
+      for (let i = 0; i < 12; i++) {
+        particles.push({
+          x: x + brickWidth / 2,
+          y: y + brickHeight / 2,
+          vx: (Math.random() - 0.5) * 6,
+          vy: (Math.random() - 0.5) * 6,
+          life: 30,
+          color: `hsl(${Math.random() * 360}, 90%, 70%)`
+        });
+      }
+    }
+
+    function drawParticles() {
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        ctx.fillStyle = p.color;
+        ctx.fillRect(p.x, p.y, 3, 3);
+        p.x += p.vx;
+        p.y += p.vy;
+        p.life--;
+        if (p.life <= 0) particles.splice(i, 1);
+      }
+    }
+
+    function collisionDetection() {
+      let destroyed = 0;
+      for (let c = 0; c < brickColumnCount; c++) {
+        for (let r = 0; r < brickRowCount; r++) {
+          const b = bricks[c][r];
+          if (b.status === 1) {
+            if (
+              x > b.x &&
+              x < b.x + brickWidth &&
+              y > b.y &&
+              y < b.y + brickHeight
+            ) {
+              dy = -dy;
+              b.status = 0;
+              createParticles(b.x, b.y);
+            }
+          }
+          if (b.status === 0) destroyed++;
+        }
+      }
+      if (destroyed === brickRowCount * brickColumnCount) {
+        win = true;
+        gameOver = true;
+      }
+    }
+
+    function drawStartScreen() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = "#222";
+　　　ctx.font = "14px sans-serif";
+  　　ctx.textAlign = "center";
+  　　ctx.fillText("ブロック崩し", canvas.width / 2, canvas.height / 2 - 40);
+ 　　 ctx.fillText("← → キーでバーを操作", canvas.width / 2, canvas.height / 2);
+  　　ctx.fillText("スペースでボール加速", canvas.width / 2, canvas.height / 2 + 20);
+  　　ctx.fillText("Enterキーでスタート", canvas.width / 2, canvas.height / 2 + 50);
+　　}
+
+
+    function drawEndScreen() {
+      ctx.fillStyle = "#333";
+      ctx.font = "14px sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText(win ? "Congratulations! 🎉" : "Game Over", canvas.width / 2, canvas.height / 2);
+      ctx.fillText("Press Enter to Restart", canvas.width / 2, canvas.height / 2 + 30);
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      drawBricks();
+      drawBall();
+      drawPaddle();
+      drawParticles();
+      collisionDetection();
+
+      if (paddleYOffset > 0) {
+        paddleYOffset -= 1;
+        if (paddleYOffset < 0) paddleYOffset = 0;
+      }
+
+      if (x + dx > canvas.width - ballRadius || x + dx < ballRadius) dx = -dx;
+      if (y + dy < ballRadius) dy = -dy;
+      else if (y + dy > canvas.height - ballRadius - paddleYOffset - paddleHeight) {
+        if (x + ballRadius > paddleX && x - ballRadius < paddleX + paddleWidth) {
+          const hitPos = (x - (paddleX + paddleWidth / 2)) / (paddleWidth / 2);
+          dx = hitPos * 4;
+          dy = -Math.max(Math.abs(dy), 3);
+        } else {
+          gameOver = true;
+        }
+      }
+
+      x += dx;
+      y += dy;
+
+      if (rightPressed && paddleX < canvas.width - paddleWidth) paddleX += 5;
+      else if (leftPressed && paddleX > 0) paddleX -= 5;
+
+      if (gameOver) drawEndScreen();
+      else requestAnimationFrame(draw);
+    }
+
+    resetGame();
+    drawStartScreen();
+  </script>
+</body>
+</html>
